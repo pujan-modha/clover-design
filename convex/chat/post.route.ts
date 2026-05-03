@@ -1,5 +1,6 @@
 import { httpAction } from "../_generated/server";
 import { api } from "../_generated/api";
+import type { Id } from "../_generated/dataModel";
 import { requireAuth } from "../lib/identity";
 
 interface ChatMessage {
@@ -11,9 +12,26 @@ interface ChatBody {
   projectId: string;
   messages: ChatMessage[];
   model?: string;
+  designSystemId?: string | null;
 }
 
-const SYSTEM_PROMPT = `You are DesignForge AI, an expert frontend engineer and UI/UX designer. You help users build web interfaces, dashboards, landing pages, and app prototypes.
+/** Minimal type for a design-system document loaded inside the action. */
+interface DesignSystemDoc {
+  tokens?: DesignSystemTokens;
+}
+
+interface DesignSystemTokens {
+  colors?: Record<string, string>;
+  typography?: {
+    fontFamily?: string;
+    sizes?: Record<string, string>;
+  };
+  spacing?: Record<string, number>;
+  borderRadius?: Record<string, number>;
+  shadows?: Record<string, string>;
+}
+
+const BASE_SYSTEM_PROMPT = `You are DesignForge AI, an expert frontend engineer and UI/UX designer. You help users build web interfaces, dashboards, landing pages, and app prototypes.
 
 When generating designs, follow these rules strictly:
 - No emojis in UI
@@ -30,6 +48,70 @@ When generating designs, follow these rules strictly:
 
 You can generate HTML/CSS/React code for designs. When asked to create something, output clean, production-ready code.`;
 
+/**
+ * Build the system prompt by appending design-system token guidance.
+ *
+ * @param designSystem - Optional design system loaded from Convex.
+ * @returns The complete system prompt string.
+ */
+function buildSystemPrompt(designSystem?: DesignSystemDoc): string {
+  if (!designSystem?.tokens) {
+    return BASE_SYSTEM_PROMPT;
+  }
+
+  const { tokens } = designSystem;
+  let tokenSection = "\n\n## Design System Tokens\nA design system is active for this project. Use the following tokens. When generating HTML/CSS, prefer CSS custom properties that match these names (e.g., `var(--df-color-primary)`, `var(--df-font-family)`, `var(--df-spacing-md)`). The canvas will inject these CSS variables automatically.\n";
+
+  if (tokens.colors) {
+    tokenSection += "\nColors:\n";
+    for (const [name, value] of Object.entries(tokens.colors)) {
+      tokenSection += `- ${name}: ${value} (use var(--df-color-${name}))\n`;
+    }
+  }
+
+  if (tokens.typography) {
+    tokenSection += "\nTypography:\n";
+    if (tokens.typography.fontFamily) {
+      tokenSection += `- Font family: ${tokens.typography.fontFamily} (use var(--df-font-family))\n`;
+    }
+    if (tokens.typography.sizes) {
+      for (const [name, value] of Object.entries(tokens.typography.sizes)) {
+        tokenSection += `- ${name}: ${value} (use var(--df-font-size-${name}))\n`;
+      }
+    }
+  }
+
+  if (tokens.spacing) {
+    tokenSection += "\nSpacing (px):\n";
+    for (const [name, value] of Object.entries(tokens.spacing)) {
+      tokenSection += `- ${name}: ${value}px (use var(--df-spacing-${name}))\n`;
+    }
+  }
+
+  if (tokens.borderRadius) {
+    tokenSection += "\nBorder Radius (px):\n";
+    for (const [name, value] of Object.entries(tokens.borderRadius)) {
+      tokenSection += `- ${name}: ${value}px (use var(--df-radius-${name}))\n`;
+    }
+  }
+
+  if (tokens.shadows) {
+    tokenSection += "\nShadows:\n";
+    for (const [name, value] of Object.entries(tokens.shadows)) {
+      tokenSection += `- ${name}: ${value} (use var(--df-shadow-${name}))\n`;
+    }
+  }
+
+  return BASE_SYSTEM_PROMPT + tokenSection;
+}
+
+/** Narrow an unknown error to a safe string message. */
+function errorMessage(err: unknown): string {
+  if (err instanceof Error) return err.message;
+  if (typeof err === "string") return err;
+  return "Unknown error";
+}
+
 export const chatPOST = httpAction(async (ctx, req) => {
   if (req.method !== "POST") {
     return new Response("Method not allowed", { status: 405 });
@@ -42,27 +124,38 @@ export const chatPOST = httpAction(async (ctx, req) => {
   }
 
   const body: ChatBody = await req.json();
-  const { projectId, messages, model = "anthropic/claude-3.5-sonnet" } = body;
+  const { projectId, messages, model = "anthropic/claude-3.5-sonnet", designSystemId } = body;
+
+  // Validate and cast IDs to Convex branded types
+  const projectIdConvex = projectId as Id<"projects">;
+  const designSystemIdConvex = designSystemId ? (designSystemId as Id<"designSystems">) : null;
 
   // Verify project ownership
-  const project = await ctx.runQuery(api.projects.get, { id: projectId as any });
+  const project = await ctx.runQuery(api.projects.get, { id: projectIdConvex });
   if (!project || project.authorId !== identity.tokenIdentifier) {
     return new Response("Project not found", { status: 404 });
+  }
+
+  // Load design system if specified
+  let designSystem: DesignSystemDoc | null = null;
+  if (designSystemIdConvex) {
+    designSystem = await ctx.runQuery(api.designSystems.get, { id: designSystemIdConvex });
   }
 
   // Save user message
   const userMessage = messages[messages.length - 1];
   if (userMessage && userMessage.role === "user") {
     await ctx.runMutation(api.chatMessages.create, {
-      projectId: projectId as any,
+      projectId: projectIdConvex,
       role: "user",
       content: userMessage.content,
     });
   }
 
   // Build messages for OpenRouter
+  const systemPrompt = buildSystemPrompt(designSystem ?? undefined);
   const openRouterMessages = [
-    { role: "system", content: SYSTEM_PROMPT },
+    { role: "system", content: systemPrompt },
     ...messages.map((m) => ({ role: m.role, content: m.content })),
   ];
 
@@ -118,7 +211,7 @@ export const chatPOST = httpAction(async (ctx, req) => {
               if (data === "[DONE]") continue;
 
               try {
-                const parsed = JSON.parse(data);
+                const parsed = JSON.parse(data) as { choices?: Array<{ delta?: { content?: string } }> };
                 const delta = parsed.choices?.[0]?.delta?.content;
                 if (delta) {
                   fullContent += delta;
@@ -127,7 +220,7 @@ export const chatPOST = httpAction(async (ctx, req) => {
                   );
                 }
               } catch {
-                // skip malformed lines
+                /* skip malformed SSE lines */
               }
             }
           }
@@ -135,16 +228,16 @@ export const chatPOST = httpAction(async (ctx, req) => {
 
         // Save assistant message
         await ctx.runMutation(api.chatMessages.create, {
-          projectId: projectId as any,
+          projectId: projectIdConvex,
           role: "assistant",
           content: fullContent,
         });
 
         controller.enqueue(encoder.encode(`data: [DONE]\n\n`));
         controller.close();
-      } catch (err: any) {
+      } catch (err: unknown) {
         controller.enqueue(
-          encoder.encode(`event: error\ndata: ${err.message}\n\n`)
+          encoder.encode(`event: error\ndata: ${errorMessage(err)}\n\n`)
         );
         controller.close();
       }

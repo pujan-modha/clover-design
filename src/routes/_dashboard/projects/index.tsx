@@ -2,6 +2,7 @@ import { createFileRoute, Link } from '@tanstack/react-router'
 import { useState } from 'react'
 import { useQuery, useMutation } from 'convex/react'
 import { api } from '../../../../convex/_generated/api'
+import type { Id } from '../../../../convex/_generated/dataModel'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 
@@ -12,6 +13,7 @@ export const Route = createFileRoute('/_dashboard/projects/')({
 function ProjectsPage() {
   const projects = useQuery(api.projects.list)
   const createProject = useMutation(api.projects.create)
+  const removeProject = useMutation(api.projects.remove)
   const [isCreating, setIsCreating] = useState(false)
   const [newName, setNewName] = useState('')
 
@@ -21,6 +23,11 @@ function ProjectsPage() {
     await createProject({ name: newName.trim() })
     setNewName('')
     setIsCreating(false)
+  }
+
+  const handleDelete = async (id: Id<'projects'>) => {
+    if (!confirm('Delete this project?')) return
+    await removeProject({ id })
   }
 
   return (
@@ -65,22 +72,39 @@ function ProjectsPage() {
       ) : (
         <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
           {projects.map((project) => (
-            <Link
+            <div
               key={project._id}
-              to="/projects/$projectId"
-              params={{ projectId: project._id }}
-              className="group rounded-xl border border-stone/20 bg-cream p-5 hover:border-terracotta/30 transition-colors no-underline"
+              className="group relative rounded-xl border border-stone/20 bg-cream p-5 hover:border-terracotta/30 transition-colors"
             >
-              <h3 className="font-medium text-ink group-hover:text-terracotta transition-colors">
-                {project.name}
-              </h3>
-              {project.description && (
-                <p className="mt-1 text-sm text-stone line-clamp-2">{project.description}</p>
-              )}
-              <p className="mt-3 text-xs text-stone">
-                Updated {new Date(project.updatedAt).toLocaleDateString()}
-              </p>
-            </Link>
+              <Link
+                to="/projects/$projectId"
+                params={{ projectId: project._id }}
+                className="no-underline block"
+              >
+                <h3 className="font-medium text-ink group-hover:text-terracotta transition-colors">
+                  {project.name}
+                </h3>
+                {project.description && (
+                  <p className="mt-1 text-sm text-stone line-clamp-2">{project.description}</p>
+                )}
+                <p className="mt-3 text-xs text-stone">
+                  Updated {new Date(project.updatedAt).toLocaleDateString()}
+                </p>
+              </Link>
+
+              <button
+                onClick={(e) => {
+                  e.stopPropagation()
+                  void handleDelete(project._id)
+                }}
+                className="absolute top-3 right-3 h-7 w-7 flex items-center justify-center rounded text-stone hover:text-red-600 hover:bg-red-50 opacity-0 group-hover:opacity-100 transition-all"
+                title="Delete project"
+              >
+                <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                </svg>
+              </button>
+            </div>
           ))}
         </div>
       )}

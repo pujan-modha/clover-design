@@ -8,10 +8,13 @@
  * @module
  */
 
+import type * as canvasSnapshots from "../canvasSnapshots.js";
 import type * as chatMessages from "../chatMessages.js";
+import type * as designSystems from "../designSystems.js";
 import type * as http from "../http.js";
 import type * as lib_identity from "../lib/identity.js";
 import type * as projects from "../projects.js";
+import type * as shareTokens from "../shareTokens.js";
 
 import type {
   ApiFromModules,
@@ -20,10 +23,13 @@ import type {
 } from "convex/server";
 
 declare const fullApi: ApiFromModules<{
+  canvasSnapshots: typeof canvasSnapshots;
   chatMessages: typeof chatMessages;
+  designSystems: typeof designSystems;
   http: typeof http;
   "lib/identity": typeof lib_identity;
   projects: typeof projects;
+  shareTokens: typeof shareTokens;
 }>;
 
 /**

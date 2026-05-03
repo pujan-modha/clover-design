@@ -50,4 +50,35 @@ export default defineSchema({
     createdAt: v.number(),
   })
     .index("byProjectId", ["projectId"]),
+
+  shareTokens: defineTable({
+    projectId: v.id("projects"),
+    token: v.string(),
+    name: v.string(),
+    createdAt: v.number(),
+    expiresAt: v.optional(v.number()),
+  })
+    .index("byProjectId", ["projectId"])
+    .index("byToken", ["token"]),
+
+  comments: defineTable({
+    projectId: v.id("projects"),
+    authorId: v.string(),
+    selector: v.string(),
+    tag: v.string(),
+    outerHTML: v.string(),
+    rect: v.object({
+      top: v.number(),
+      left: v.number(),
+      width: v.number(),
+      height: v.number(),
+    }),
+    text: v.string(),
+    kind: v.union(v.literal("note"), v.literal("edit")),
+    status: v.union(v.literal("pending"), v.literal("applied")),
+    createdAt: v.number(),
+    updatedAt: v.number(),
+  })
+    .index("byProjectId", ["projectId"])
+    .index("byProjectIdAndCreatedAt", ["projectId", "createdAt"]),
 });

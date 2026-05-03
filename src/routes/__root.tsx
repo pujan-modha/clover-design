@@ -23,9 +23,22 @@ export const Route = createRootRoute({
 
 function RootDocument({ children }: { children: React.ReactNode }) {
   return (
-    <html lang="en">
+    <html lang="en" suppressHydrationWarning>
       <head>
         <HeadContent />
+        <script
+          dangerouslySetInnerHTML={{
+            __html: `
+              (function() {
+                const theme = localStorage.getItem('df-theme') || 'light';
+                if (theme === 'dark') {
+                  document.documentElement.classList.add('dark');
+                  document.documentElement.style.colorScheme = 'dark';
+                }
+              })();
+            `,
+          }}
+        />
       </head>
       <body className="font-sans antialiased bg-parchment text-ink">
         <ConvexProvider client={convex}>

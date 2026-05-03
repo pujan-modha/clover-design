@@ -12,10 +12,13 @@ import { Route as rootRouteImport } from './routes/__root'
 import { Route as DashboardRouteImport } from './routes/_dashboard'
 import { Route as AuthRouteImport } from './routes/_auth'
 import { Route as IndexRouteImport } from './routes/index'
+import { Route as ShareTokenRouteImport } from './routes/share/$token'
 import { Route as AuthRegisterRouteImport } from './routes/_auth/register'
 import { Route as AuthLoginRouteImport } from './routes/_auth/login'
 import { Route as DashboardProjectsIndexRouteImport } from './routes/_dashboard/projects/index'
+import { Route as DashboardDesignSystemsIndexRouteImport } from './routes/_dashboard/design-systems/index'
 import { Route as DashboardProjectsProjectIdRouteImport } from './routes/_dashboard/projects/$projectId'
+import { Route as DashboardDesignSystemsSystemIdRouteImport } from './routes/_dashboard/design-systems/$systemId'
 
 const DashboardRoute = DashboardRouteImport.update({
   id: '/_dashboard',
@@ -28,6 +31,11 @@ const AuthRoute = AuthRouteImport.update({
 const IndexRoute = IndexRouteImport.update({
   id: '/',
   path: '/',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ShareTokenRoute = ShareTokenRouteImport.update({
+  id: '/share/$token',
+  path: '/share/$token',
   getParentRoute: () => rootRouteImport,
 } as any)
 const AuthRegisterRoute = AuthRegisterRouteImport.update({
@@ -45,10 +53,22 @@ const DashboardProjectsIndexRoute = DashboardProjectsIndexRouteImport.update({
   path: '/projects/',
   getParentRoute: () => DashboardRoute,
 } as any)
+const DashboardDesignSystemsIndexRoute =
+  DashboardDesignSystemsIndexRouteImport.update({
+    id: '/design-systems/',
+    path: '/design-systems/',
+    getParentRoute: () => DashboardRoute,
+  } as any)
 const DashboardProjectsProjectIdRoute =
   DashboardProjectsProjectIdRouteImport.update({
     id: '/projects/$projectId',
     path: '/projects/$projectId',
+    getParentRoute: () => DashboardRoute,
+  } as any)
+const DashboardDesignSystemsSystemIdRoute =
+  DashboardDesignSystemsSystemIdRouteImport.update({
+    id: '/design-systems/$systemId',
+    path: '/design-systems/$systemId',
     getParentRoute: () => DashboardRoute,
   } as any)
 
@@ -56,14 +76,20 @@ export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/login': typeof AuthLoginRoute
   '/register': typeof AuthRegisterRoute
+  '/share/$token': typeof ShareTokenRoute
+  '/design-systems/$systemId': typeof DashboardDesignSystemsSystemIdRoute
   '/projects/$projectId': typeof DashboardProjectsProjectIdRoute
+  '/design-systems/': typeof DashboardDesignSystemsIndexRoute
   '/projects/': typeof DashboardProjectsIndexRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/login': typeof AuthLoginRoute
   '/register': typeof AuthRegisterRoute
+  '/share/$token': typeof ShareTokenRoute
+  '/design-systems/$systemId': typeof DashboardDesignSystemsSystemIdRoute
   '/projects/$projectId': typeof DashboardProjectsProjectIdRoute
+  '/design-systems': typeof DashboardDesignSystemsIndexRoute
   '/projects': typeof DashboardProjectsIndexRoute
 }
 export interface FileRoutesById {
@@ -73,7 +99,10 @@ export interface FileRoutesById {
   '/_dashboard': typeof DashboardRouteWithChildren
   '/_auth/login': typeof AuthLoginRoute
   '/_auth/register': typeof AuthRegisterRoute
+  '/share/$token': typeof ShareTokenRoute
+  '/_dashboard/design-systems/$systemId': typeof DashboardDesignSystemsSystemIdRoute
   '/_dashboard/projects/$projectId': typeof DashboardProjectsProjectIdRoute
+  '/_dashboard/design-systems/': typeof DashboardDesignSystemsIndexRoute
   '/_dashboard/projects/': typeof DashboardProjectsIndexRoute
 }
 export interface FileRouteTypes {
@@ -82,10 +111,21 @@ export interface FileRouteTypes {
     | '/'
     | '/login'
     | '/register'
+    | '/share/$token'
+    | '/design-systems/$systemId'
     | '/projects/$projectId'
+    | '/design-systems/'
     | '/projects/'
   fileRoutesByTo: FileRoutesByTo
-  to: '/' | '/login' | '/register' | '/projects/$projectId' | '/projects'
+  to:
+    | '/'
+    | '/login'
+    | '/register'
+    | '/share/$token'
+    | '/design-systems/$systemId'
+    | '/projects/$projectId'
+    | '/design-systems'
+    | '/projects'
   id:
     | '__root__'
     | '/'
@@ -93,7 +133,10 @@ export interface FileRouteTypes {
     | '/_dashboard'
     | '/_auth/login'
     | '/_auth/register'
+    | '/share/$token'
+    | '/_dashboard/design-systems/$systemId'
     | '/_dashboard/projects/$projectId'
+    | '/_dashboard/design-systems/'
     | '/_dashboard/projects/'
   fileRoutesById: FileRoutesById
 }
@@ -101,6 +144,7 @@ export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
   AuthRoute: typeof AuthRouteWithChildren
   DashboardRoute: typeof DashboardRouteWithChildren
+  ShareTokenRoute: typeof ShareTokenRoute
 }
 
 declare module '@tanstack/react-router' {
@@ -126,6 +170,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof IndexRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/share/$token': {
+      id: '/share/$token'
+      path: '/share/$token'
+      fullPath: '/share/$token'
+      preLoaderRoute: typeof ShareTokenRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/_auth/register': {
       id: '/_auth/register'
       path: '/register'
@@ -147,11 +198,25 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof DashboardProjectsIndexRouteImport
       parentRoute: typeof DashboardRoute
     }
+    '/_dashboard/design-systems/': {
+      id: '/_dashboard/design-systems/'
+      path: '/design-systems'
+      fullPath: '/design-systems/'
+      preLoaderRoute: typeof DashboardDesignSystemsIndexRouteImport
+      parentRoute: typeof DashboardRoute
+    }
     '/_dashboard/projects/$projectId': {
       id: '/_dashboard/projects/$projectId'
       path: '/projects/$projectId'
       fullPath: '/projects/$projectId'
       preLoaderRoute: typeof DashboardProjectsProjectIdRouteImport
+      parentRoute: typeof DashboardRoute
+    }
+    '/_dashboard/design-systems/$systemId': {
+      id: '/_dashboard/design-systems/$systemId'
+      path: '/design-systems/$systemId'
+      fullPath: '/design-systems/$systemId'
+      preLoaderRoute: typeof DashboardDesignSystemsSystemIdRouteImport
       parentRoute: typeof DashboardRoute
     }
   }
@@ -170,12 +235,16 @@ const AuthRouteChildren: AuthRouteChildren = {
 const AuthRouteWithChildren = AuthRoute._addFileChildren(AuthRouteChildren)
 
 interface DashboardRouteChildren {
+  DashboardDesignSystemsSystemIdRoute: typeof DashboardDesignSystemsSystemIdRoute
   DashboardProjectsProjectIdRoute: typeof DashboardProjectsProjectIdRoute
+  DashboardDesignSystemsIndexRoute: typeof DashboardDesignSystemsIndexRoute
   DashboardProjectsIndexRoute: typeof DashboardProjectsIndexRoute
 }
 
 const DashboardRouteChildren: DashboardRouteChildren = {
+  DashboardDesignSystemsSystemIdRoute: DashboardDesignSystemsSystemIdRoute,
   DashboardProjectsProjectIdRoute: DashboardProjectsProjectIdRoute,
+  DashboardDesignSystemsIndexRoute: DashboardDesignSystemsIndexRoute,
   DashboardProjectsIndexRoute: DashboardProjectsIndexRoute,
 }
 
@@ -187,6 +256,7 @@ const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   AuthRoute: AuthRouteWithChildren,
   DashboardRoute: DashboardRouteWithChildren,
+  ShareTokenRoute: ShareTokenRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)

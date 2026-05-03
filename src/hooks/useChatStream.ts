@@ -23,12 +23,22 @@ interface UseChatStreamReturn {
   stop: () => void;
 }
 
+/**
+ * Hook for streaming chat with an AI backend via SSE.
+ *
+ * Keeps message history in React state and provides a stable `sendMessage`
+ * callback. Uses a ref to avoid stale closures when reading the current
+ * message list inside the streaming loop.
+ */
 export function useChatStream(options: UseChatStreamOptions): UseChatStreamReturn {
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [input, setInput] = useState("");
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const abortRef = useRef<AbortController | null>(null);
+  /** Ref that always mirrors the latest messages array. */
+  const messagesRef = useRef<ChatMessage[]>(messages);
+  messagesRef.current = messages;
 
   const stop = useCallback(() => {
     abortRef.current?.abort();
@@ -73,7 +83,8 @@ export function useChatStream(options: UseChatStreamOptions): UseChatStreamRetur
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
             projectId: options.projectId,
-            messages: [...messages, userMsg].map((m) => ({
+            /** Read from ref so we always send the up-to-date history. */
+            messages: [...messagesRef.current, userMsg].map((m) => ({
               role: m.role,
               content: m.content,
             })),
@@ -103,7 +114,7 @@ export function useChatStream(options: UseChatStreamOptions): UseChatStreamRetur
             if (data === "[DONE]") continue;
 
             try {
-              const parsed = JSON.parse(data);
+              const parsed = JSON.parse(data) as { content?: string };
               if (parsed.content) {
                 setMessages((prev) =>
                   prev.map((m) =>
@@ -114,7 +125,7 @@ export function useChatStream(options: UseChatStreamOptions): UseChatStreamRetur
                 );
               }
             } catch {
-              // skip
+              /* skip malformed SSE line */
             }
           } else if (line.startsWith("event: error")) {
             const errLine = lines.find((l) => l.startsWith("data: "));
@@ -124,13 +135,16 @@ export function useChatStream(options: UseChatStreamOptions): UseChatStreamRetur
           }
         }
       }
-    } catch (err: any) {
-      if (err.name !== "AbortError") {
-        setError(err.message || "Failed to get response");
+    } catch (err: unknown) {
+      if (err instanceof Error && err.name === "AbortError") {
+        /* user cancelled — no-op */
+      } else {
+        const message = err instanceof Error ? err.message : "Failed to get response";
+        setError(message);
         setMessages((prev) =>
           prev.map((m) =>
             m.id === assistantMsgId
-              ? { ...m, content: m.content || "Error: " + err.message }
+              ? { ...m, content: m.content || "Error: " + message }
               : m
           )
         );
@@ -139,7 +153,7 @@ export function useChatStream(options: UseChatStreamOptions): UseChatStreamRetur
       setIsLoading(false);
       abortRef.current = null;
     }
-  }, [input, isLoading, messages, options.projectId]);
+  }, [input, isLoading, options.projectId]);
 
   return {
     messages,
