@@ -1,68 +1,57 @@
 ---
 name: web-prototype
 description: |
-  General-purpose desktop web prototype. Single self-contained HTML file.
-  Default for any landing / marketing / docs / SaaS page.
+  General-purpose desktop web prototype. Single self-contained HTML file
+  with semantic markup, inline CSS, and responsive breakpoints. Default
+  for landing, marketing, docs, or SaaS pages.
 triggers:
   - "prototype"
   - "mockup"
   - "landing"
-  - "homepage"
+  - "single page"
   - "marketing page"
+  - "homepage"
+  - "web page"
+  - "site"
+df:
+  mode: prototype
+  platform: desktop
+  scenario: design
+  preview:
+    type: html
+    entry: index.html
+  design_system:
+    requires: true
+    sections: [color, typography, layout, components]
 ---
 
 # Web Prototype Skill
 
-Produce a single, self-contained HTML prototype with good defaults (typography, spacing, accent budget).
+Produce a single self-contained HTML prototype using the active design system.
 
 ## Workflow
 
-### Step 0 — Pre-flight
-1. Read the active DESIGN.md if one exists. Map its colors to CSS `:root` variables.
-2. Plan the section list before writing.
-
-### Step 1 — Build structure
-Create a single HTML file with:
-- `<!doctype html>` and responsive meta tags
-- CSS in `<style>` using CSS custom properties for tokens
-- Semantic HTML structure
-
-### Step 2 — Add Tweaks (MANDATORY)
-After the design is complete, add tweak controls so the user can adjust parameters:
-
-```html
-<script>
-const TWEAK_DEFAULTS = /*EDITMODE-BEGIN*/{
-  "primaryColor": "#c96442",
-  "fontSize": 16,
-  "density": "comfortable",
-  "dark": false
-}/*EDITMODE-END*/;
-
-const TWEAK_SCHEMA = /*EDITMODE-BEGIN*/{
-  "primaryColor": { "kind": "color" },
-  "fontSize": { "kind": "number", "min": 12, "max": 24, "step": 1, "unit": "px" },
-  "density": { "kind": "enum", "options": ["compact", "comfortable", "spacious"] },
-  "dark": { "kind": "boolean" }
-}/*EDITMODE-END*/;
-</script>
-```
-
-Use CSS variables in your design: `background: var(--tweak-primaryColor, #c96442);`
-
-### Step 3 — Self-check
-- Single accent, used at most twice per screen
-- Mobile reflow works at 768px
-- No external CDN dependencies (fonts OK from Google Fonts)
-- All images are data URIs or inline SVG placeholders
-
-### Step 4 — Emit
-Wrap in `<artifact>` tags. One sentence before describing what's there.
+1. **Read DESIGN.md**. Map colors to `--df-color-*` and fonts to `--df-font-family`.
+2. **Plan sections** before writing. State the list in one sentence.
+3. **Default rhythms**:
+   | Page kind | Rhythm |
+   |---|---|
+   | Landing | Hero → Features → Stats/Quote → Split → CTA → Footer |
+   | Marketing | Hero → Logos → CTA → Footer |
+   | Pricing | Hero → Comparison → CTA → Footer |
+4. **Write** `index.html` with inline CSS, semantic HTML, `data-df-id` tags.
+5. **Self-check**: meaningful text, valid colors, responsive at 920px/640px,
+accent ≤2× per screen.
 
 ## Hard rules
+- Single accent, max twice per screen.
+- No external JS.
+- No pure black (#000000).
+- Placeholder images as CSS gradients/SVG only.
 
-- **Single accent budget** — eyebrow + primary CTA only
-- **Display font is serif** (Georgia / Iowan / Charter). Sans for body. Mono for captions.
-- **Image placeholders, not external URLs**
-- **Mobile reflow already works** via media query at 768px
-- **Every section has `data-df-id`** so comment mode can target it
+## Output
+```
+<artifact identifier="slug" type="text/html" title="Title">
+<!doctype html><html>...</html>
+</artifact>
+```

@@ -1,103 +1,52 @@
 ---
 name: tweaks
 description: |
-  AI-emitted tweak controls panel. The model surfaces parameters worth
-  nudging — color, spacing, typography, density — so the user can
-  refine without another full prompt. Pure frontend + localStorage.triggers:
+  Generate a TWEAK_SCHEMA and EDITMODE block inside HTML so users can
+  adjust colors, spacing, typography, and layout via dynamic sliders.
+  Companion to any visual skill.
+triggers:
   - "tweak"
+  - "tweaks"
   - "adjust"
-  - "variant"
-  - "parameter"
-  - "tweak panel"
+  - "slider"
+  - "dynamic"
+  - "parameters"
+df:
+  mode: utility
+  platform: any
+  scenario: design
+  design_system:
+    requires: true
 ---
 
-# Tweaks Skill · 设计变体实时调参
+# Tweaks Skill
 
-Add tweak controls to any design so users can adjust parameters without editing code.
+Inject dynamic tweakability into any HTML artifact.
 
-## When to add Tweaks
-
-- User asks for "adjustable parameters" or "multiple versions"
-- Design has clear variations worth exploring
-- Even if not asked, add 2–3 tweaks to every design — it shows possibility space
-
-## Implementation
-
-Add this block to your HTML's `<script>`:
+## How it works
+Add a `TWEAK_SCHEMA` and `TWEAK_DEFAULTS` block inside a `<script>` tag:
 
 ```html
 <script>
-const TWEAK_DEFAULTS = /*EDITMODE-BEGIN*/{
-  "primaryColor": "#c96442",
-  "fontSize": 16,
-  "density": "comfortable",
-  "dark": false
-}/*EDITMODE-END*/;
-
 const TWEAK_SCHEMA = /*EDITMODE-BEGIN*/{
-  "primaryColor": { "kind": "color" },
-  "fontSize": { "kind": "number", "min": 12, "max": 24, "step": 1, "unit": "px" },
-  "density": { "kind": "enum", "options": ["compact", "comfortable", "spacious"] },
-  "dark": { "kind": "boolean" }
+  "heroPadding": { "kind": "number", "min": 40, "max": 200, "step": 8, "unit": "px" },
+  "accentColor": { "kind": "color" },
+  "headingFont": { "kind": "enum", "options": ["serif", "sans", "mono"] }
 }/*EDITMODE-END*/;
 
-let tweakState = { ...TWEAK_DEFAULTS };
-try {
-  const stored = localStorage.getItem('designforge-tweaks');
-  if (stored) tweakState = { ...tweakState, ...JSON.parse(stored) };
-} catch(e) {}
-
-function applyTweaks() {
-  const root = document.documentElement;
-  Object.entries(tweakState).forEach(([key, val]) => {
-    root.style.setProperty('--tweak-' + key, String(val));
-  });
-}
-
-window.addEventListener('message', function(e) {
-  if (e.data && e.data.type === 'designforge:tweaks:update') {
-    tweakState = { ...tweakState, ...e.data.tokens };
-    try { localStorage.setItem('designforge-tweaks', JSON.stringify(tweakState)); } catch(e) {}
-    applyTweaks();
-  }
-});
-
-applyTweaks();
+const TWEAK_DEFAULTS = /*EDITMODE-BEGIN*/{
+  "heroPadding": 96,
+  "accentColor": "#c96442",
+  "headingFont": "serif"
+}/*EDITMODE-END*/;
 </script>
 ```
 
-Use variables in CSS:
-```css
-.cta-button {
-  background: var(--tweak-primaryColor, #c96442);
-  font-size: var(--tweak-fontSize, 16px);
-}
-body {
-  padding: var(--tweak-density, comfortable) === 'compact' ? '8px' : '24px';
-}
-```
+## Rules
+- Every tweakable property must have a schema entry.
+- Use `var(--tweak-<key>)` in CSS to consume the value.
+- The tweak panel reads TWEAK_SCHEMA and renders controls automatically.
+- Default values must be valid and within min/max ranges.
 
-## Typical Tweak Options
-
-### Universal
-- Primary color (color picker)
-- Font size (slider 12–24px)
-- Dark mode (toggle)
-
-### Landing page
-- Hero style (image / gradient / pattern / solid)
-- CTA variant
-- Layout (single / two column / sidebar)
-
-### Product prototype
-- Layout variant (A / B / C)
-- Animation speed (0.5x–2x)
-- Data density (5 / 20 / 100 mock items)
-- State (empty / loading / success / error)
-
-## Design principles
-
-1. **Meaningful options** — discrete variations, not continuous sliders for things that look bad at intermediate values
-2. **Max 5–6 options** — more becomes a config page
-3. **Defaults are shippable** — tweaks are exploration, not required fixes
-4. **Group by category** — Visual / Layout / Content
+## Output
+Injectable script block. Add to any generated HTML.

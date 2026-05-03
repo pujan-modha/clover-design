@@ -1,54 +1,36 @@
 ---
 name: dashboard
 description: |
-  Admin / analytics dashboard with sidebar + dense data layout.
-  Tables, charts, KPI cards, filters, pagination.triggers:
+  Admin / analytics dashboard. Fixed sidebar, top bar, KPI cards, inline SVG charts.
+triggers:
   - "dashboard"
   - "admin panel"
   - "analytics"
-  - "data table"
-  - "back office"
+  - "control panel"
+df:
+  mode: prototype
+  platform: desktop
+  scenario: operations
+  preview:
+    type: html
+    entry: index.html
+  design_system:
+    requires: true
 ---
 
 # Dashboard Skill
 
-Produce a dense, functional admin dashboard. Sidebar navigation + main content area with data tables, KPI cards, and chart placeholders.
+## Layout
+- **Left sidebar** (220–260px): brand, 6–8 nav links, active uses accent.
+- **Top bar**: title left, search + avatar right.
+- **Main**:
+  - Row 1: 3–4 KPI cards (label + big number + delta).
+  - Row 2: primary inline SVG chart (line/bar/area).
+  - Row 3: secondary chart or recent-events table.
 
-## Structure
-
-```
-dashboard/
-├── sidebar (200px fixed, collapsible on mobile)
-│   ├── Logo / brand
-│   ├── Nav sections (Dashboard, Users, Orders, Analytics, Settings)
-│   └── User profile at bottom
-└── main
-    ├── Header (breadcrumb + search + notifications + profile)
-    ├── KPI row (4 cards: revenue, users, conversion, churn)
-    ├── Chart area (placeholder for chart library)
-    ├── Data table (sortable headers, pagination, row actions)
-    └── Footer
-```
-
-## Tweaks (add to every dashboard)
-
-```html
-<script>
-const TWEAK_DEFAULTS = /*EDITMODE-BEGIN*/{
-  "sidebarWidth": 200,
-  "dataDensity": "comfortable",
-  "chartType": "line",
-  "accentColor": "#3b82f6",
-  "showKPIs": true
-}/*EDITMODE-END*/;
-</script>
-```
-
-## Hard rules
-
-- **Dense by default** — whitespace is expensive in dashboards
-- **Tabular numbers** — `font-variant-numeric: tabular-nums` on all figures
-- **Sortable headers** — visual affordance on table headers
-- **Row hover states** — every row must highlight on hover
-- **Action menus** — ellipsis dropdown on each row
-- **Empty states** — designed, not just "no data"
+## Rules
+- Inline SVG charts only — no JS libraries.
+- Every color from DESIGN.md.
+- Accent ≤2× (sidebar active + one highlight).
+- Sidebar + top bar sticky; main scrolls independently.
+- `data-df-id` on each region.
