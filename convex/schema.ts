@@ -1,6 +1,15 @@
 import { defineSchema, defineTable } from "convex/server";
 import { v } from "convex/values";
 
+export const ModelAbilitySchema = v.union(
+  v.literal("reasoning"),
+  v.literal("vision"),
+  v.literal("function_calling"),
+  v.literal("pdf"),
+  v.literal("effort_control"),
+  v.literal("image_generation")
+);
+
 export default defineSchema({
   projects: defineTable({
     name: v.string(),
@@ -81,4 +90,82 @@ export default defineSchema({
   })
     .index("byProjectId", ["projectId"])
     .index("byProjectIdAndCreatedAt", ["projectId", "createdAt"]),
+
+  /** User settings including AI provider and model configuration. */
+  settings: defineTable({
+    userId: v.string(),
+    /** Core providers: openai, anthropic, google */
+    coreProviders: v.record(
+      v.string(),
+      v.object({
+        enabled: v.boolean(),
+        encryptedKey: v.string(),
+      })
+    ),
+    /** Custom providers with editable endpoints. */
+    customProviders: v.record(
+      v.string(),
+      v.object({
+        name: v.string(),
+        enabled: v.boolean(),
+        endpoint: v.string(),
+        protocol: v.union(v.literal("openai"), v.literal("anthropic"), v.literal("google")),
+        encryptedKey: v.string(),
+      })
+    ),
+    /** Custom models defined by the user. */
+    customModels: v.record(
+      v.string(),
+      v.object({
+        enabled: v.boolean(),
+        name: v.optional(v.string()),
+        modelId: v.string(),
+        providerId: v.string(),
+        contextLength: v.optional(v.number()),
+        maxTokens: v.optional(v.number()),
+        abilities: v.array(ModelAbilitySchema),
+      })
+    ),
+    /** Last selected model ID per project (or global). */
+    selectedModel: v.optional(v.string()),
+    /** Reasoning effort preference. */
+    reasoningEffort: v.optional(v.union(v.literal("low"), v.literal("medium"), v.literal("high"))),
+    /** UI preferences. */
+    uiPreferences: v.optional(v.any()),
+    createdAt: v.number(),
+    updatedAt: v.number(),
+  })
+    .index("byUser", ["userId"]),
+
+
+  /** Stream state for resumable AI generation */
+  streamStates: defineTable({
+    projectId: v.id("projects"),
+    authorId: v.string(),
+    status: v.union(v.literal("running"), v.literal("paused"), v.literal("completed"), v.literal("error")),
+    content: v.string(),
+    messages: v.array(v.any()),
+    model: v.string(),
+    providerId: v.string(),
+    designSystemId: v.optional(v.id("designSystems")),
+    skillId: v.optional(v.string()),
+    error: v.optional(v.string()),
+    startedAt: v.number(),
+    updatedAt: v.number(),
+    completedAt: v.optional(v.number()),
+  })
+    .index("byProjectId", ["projectId"])
+    .index("byProjectAndStatus", ["projectId", "status"]),
+
+  files: defineTable({
+    projectId: v.optional(v.id("projects")),
+    authorId: v.string(),
+    name: v.string(),
+    type: v.string(),
+    size: v.number(),
+    storageId: v.id("_storage"),
+    createdAt: v.number(),
+  })
+    .index("byProjectId", ["projectId"])
+    .index("byAuthorId", ["authorId"]),
 });

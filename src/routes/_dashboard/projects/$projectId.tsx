@@ -8,6 +8,10 @@ import { CANVAS_INJECTOR_SCRIPT, postToCanvas } from '@/lib/canvas-injector'
 import type { ElementData } from '@/lib/canvas-injector'
 import { PinOverlay, CommentBubble, CommentsToolbar } from '@/components/canvas/CommentOverlay'
 import { TweakPanel } from '@/components/canvas/TweakPanel'
+import { ModelSelector } from '@/components/chat/ModelSelector'
+import { buildSrcdoc } from '@/lib/srcdoc-builder'
+import { exportCanvas } from '@/lib/export'
+import { lintArtifact, formatLintResult } from '@/lib/lint-artifact'
 import type { CommentRow, CommentRect, ChatMessageRow } from '@/lib/types'
 import { errorMessage } from '@/lib/types'
 
@@ -212,6 +216,9 @@ export default function ProjectPage() {
     setTimeout(() => void handleSendFromPrompt(prompt), 100)
   }
 
+  /* Model selection */
+  const [selectedModel, setSelectedModel] = useState<string>('')
+
   /** Core streaming send logic. Accepts an explicit prompt so it can be reused by comment flow. */
   const handleSendFromPrompt = useCallback(async (promptText: string) => {
     if (!promptText.trim() || isLoading) return
@@ -240,6 +247,7 @@ export default function ProjectPage() {
             role: m.role,
             content: m.content,
           })),
+          model: selectedModel || undefined,
           designSystemId: project?.designSystemId ?? null,
         }),
         signal: abortController.signal,
@@ -253,25 +261,24 @@ export default function ProjectPage() {
       const reader = res.body!.getReader()
       const decoder = new TextDecoder()
       let fullContent = ''
+      let buffer = ''
 
       while (true) {
         const { done, value } = await reader.read()
         if (done) break
-        const chunk = decoder.decode(value, { stream: true })
-        const lines = chunk.split('\n')
+        buffer += decoder.decode(value, { stream: true })
+        const lines = buffer.split('\n')
+        buffer = lines.pop() ?? ''
         for (const line of lines) {
-          if (line.startsWith('data: ')) {
-            const data = line.slice(6)
-            if (data === '[DONE]') continue
-            try {
-              const parsed = JSON.parse(data) as { content?: string }
-              if (parsed.content) {
-                fullContent += parsed.content
-                setStreamContent(fullContent)
-              }
-            } catch {
-              /* skip malformed SSE line */
+          if (!line.startsWith('0:')) continue
+          try {
+            const parsed = JSON.parse(line.slice(2))
+            if (parsed.type === 'content' && parsed.chunk) {
+              fullContent += parsed.chunk
+              setStreamContent(fullContent)
             }
+          } catch {
+            /* skip malformed line */
           }
         }
       }
@@ -291,7 +298,7 @@ export default function ProjectPage() {
     } finally {
       setIsLoading(false)
     }
-  }, [isLoading, projectId, createMessage, project?.designSystemId, updateProject])
+  }, [isLoading, projectId, createMessage, project?.designSystemId, updateProject, selectedModel])
 
   const handleDesignSystemChange = async (dsId: string | null) => {
     await updateProject({
@@ -364,7 +371,10 @@ export default function ProjectPage() {
       {/* ── Chat sidebar ── */}
       <aside className="w-80 flex-shrink-0 flex flex-col border-r border-stone/10">
         <div className="px-4 py-3 border-b border-stone/10 space-y-2">
-          <h2 className="font-medium text-ink text-sm truncate">{project.name}</h2>
+          <div className="flex items-center justify-between">
+            <h2 className="font-medium text-ink text-sm truncate">{project.name}</h2>
+            <ModelSelector selectedModel={selectedModel} onModelChange={setSelectedModel} />
+          </div>
           <p className="text-xs text-stone truncate">{project.description || 'No description'}</p>
 
           <div className="pt-1">
@@ -509,6 +519,16 @@ export default function ProjectPage() {
                 {selectedDesignSystem.name}
               </span>
             )}
+            <button
+              onClick={() => {
+                const result = lintArtifact(canvasHtml)
+                alert(formatLintResult(result))
+              }}
+              className="h-7 px-2 rounded text-xs font-medium text-stone hover:text-ink hover:bg-linen transition-colors"
+              title="Lint for AI slop"
+            >
+              Lint
+            </button>
           </div>
 
           <div className="flex items-center gap-1">
@@ -563,7 +583,12 @@ export default function ProjectPage() {
                     className="bg-white rounded-lg shadow-sm border border-stone/10"
                     style={{ width: 1024, minHeight: 640 }}
                     sandbox="allow-scripts"
-                    srcDoc={injectScriptIntoHtml(canvasHtml)}
+                    srcDoc={buildSrcdoc({
+                      html: canvasHtml,
+                      designSystemTokens: selectedDesignSystem?.tokens,
+                      commentBridge: true,
+                      tweakBridge: true,
+                    })}
                   />
                   <PinOverlay
                     comments={commentList}
@@ -743,48 +768,19 @@ function ExportModal({ content, projectName, onClose }: {
   const html = content || '<!-- No content -->'
 
   const downloadHtml = () => {
-    const blob = new Blob([html], { type: 'text/html' })
-    const url = URL.createObjectURL(blob)
-    const a = document.createElement('a')
-    a.href = url
-    a.download = `${projectName.replace(/\s+/g, '-').toLowerCase()}.html`
-    a.click()
-    URL.revokeObjectURL(url)
+    void exportCanvas(html, { format: 'html', filename: projectName.replace(/\s+/g, '-').toLowerCase() })
   }
 
-  const downloadReact = () => {
-    const componentName = projectName.replace(/[^a-zA-Z0-9]/g, '') || 'Design'
-    const reactCode = `import React from 'react';
-
-export default function ${componentName}() {
-  return (
-    <div
-      dangerouslySetInnerHTML={{
-        __html: \`${html.replace(/`/g, '\\`').replace(/\$/g, '\\$')}\`
-      }}
-    />
-  );
-}
-`
-    const blob = new Blob([reactCode], { type: 'text/typescript' })
-    const url = URL.createObjectURL(blob)
-    const a = document.createElement('a')
-    a.href = url
-    a.download = `${componentName}.tsx`
-    a.click()
-    URL.revokeObjectURL(url)
+  const downloadPdf = () => {
+    void exportCanvas(html, { format: 'pdf', filename: projectName.replace(/\s+/g, '-').toLowerCase() })
   }
 
   const downloadZip = () => {
-    const readme = `# ${projectName}\n\nExported from DesignForge.\n\nOpen index.html in your browser to view.\n`
-    const zipContent = `--- index.html ---\n${html}\n\n--- README.md ---\n${readme}`
-    const blob = new Blob([zipContent], { type: 'text/plain' })
-    const url = URL.createObjectURL(blob)
-    const a = document.createElement('a')
-    a.href = url
-    a.download = `${projectName.replace(/\s+/g, '-').toLowerCase()}.txt`
-    a.click()
-    URL.revokeObjectURL(url)
+    void exportCanvas(html, { format: 'zip', filename: projectName.replace(/\s+/g, '-').toLowerCase() })
+  }
+
+  const copyHtml = () => {
+    navigator.clipboard.writeText(html)
   }
 
   return (
@@ -797,16 +793,22 @@ export default function ${componentName}() {
           onClick={downloadHtml}
         />
         <ExportOption
-          icon="react"
-          title="React Component"
-          description=".tsx file wrapping the HTML output"
-          onClick={downloadReact}
+          icon="pdf"
+          title="Download PDF"
+          description="Print-ready PDF using browser print"
+          onClick={downloadPdf}
         />
         <ExportOption
           icon="zip"
           title="Download ZIP"
-          description="HTML file with README"
+          description="HTML + README + assets bundle"
           onClick={downloadZip}
+        />
+        <ExportOption
+          icon="copy"
+          title="Copy HTML"
+          description="Copy raw HTML to clipboard"
+          onClick={copyHtml}
         />
       </div>
     </Modal>
@@ -814,15 +816,16 @@ export default function ${componentName}() {
 }
 
 function ExportOption({ icon, title, description, onClick }: {
-  icon: 'html' | 'react' | 'zip'
+  icon: 'html' | 'pdf' | 'zip' | 'copy'
   title: string
   description: string
   onClick: () => void
 }) {
   const colors = {
     html: 'bg-orange-100 text-orange-600',
-    react: 'bg-blue-100 text-blue-600',
+    pdf: 'bg-red-100 text-red-600',
     zip: 'bg-purple-100 text-purple-600',
+    copy: 'bg-blue-100 text-blue-600',
   }
   return (
     <button
@@ -835,14 +838,19 @@ function ExportOption({ icon, title, description, onClick }: {
             <path strokeLinecap="round" strokeLinejoin="round" d="M10 20l4-16m4 4l4 4-4 4M6 16l-4-4 4-4" />
           </svg>
         )}
-        {icon === 'react' && (
+        {icon === 'pdf' && (
           <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-            <path strokeLinecap="round" strokeLinejoin="round" d="M14 10l-2 1m0 0l-2-1m2 1v2.5M20 7l-2 1m2-1l-2-1m2 1v2.5M14 4l-2-1-2 1M4 7l2-1M4 7l2 1M4 7v2.5M12 21l-2-1m2 1l2-1m-2 1v-2.5M6 18l-2-1v-2.5M18 18l2-1v-2.5" />
+            <path strokeLinecap="round" strokeLinejoin="round" d="M7 21h10a2 2 0 002-2V9.414a1 1 0 00-.293-.707l-5.414-5.414A1 1 0 0012.586 3H7a2 2 0 00-2 2v14a2 2 0 002 2z" />
           </svg>
         )}
         {icon === 'zip' && (
           <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
             <path strokeLinecap="round" strokeLinejoin="round" d="M5 8h14M5 8a2 2 0 110-4h14a2 2 0 110 4M5 8v10a2 2 0 002 2h10a2 2 0 002-2V8m-9 4h4" />
+          </svg>
+        )}
+        {icon === 'copy' && (
+          <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+            <path strokeLinecap="round" strokeLinejoin="round" d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" />
           </svg>
         )}
       </div>

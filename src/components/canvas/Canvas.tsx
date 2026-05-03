@@ -1,35 +1,65 @@
 import { useState, useCallback, useRef, useEffect } from "react";
 import { Button } from "@/components/ui/button";
+import { buildSrcdoc } from "@/lib/srcdoc-builder";
+import { exportCanvas } from "@/lib/export";
+import { lintArtifact, formatLintResult } from "@/lib/lint-artifact";
 
 interface CanvasProps {
   content?: string | null;
+  designSystemTokens?: Record<string, any>;
   onContentChange?: (content: string) => void;
 }
 
-export function Canvas({ content, onContentChange }: CanvasProps) {
+export function Canvas({ content, designSystemTokens, onContentChange }: CanvasProps) {
   const iframeRef = useRef<HTMLIFrameElement>(null);
   const [scale, setScale] = useState(1);
   const [showGrid, setShowGrid] = useState(true);
+  const [commentMode, setCommentMode] = useState(false);
+  const [lintResult, setLintResult] = useState<string | null>(null);
 
   const updateIframe = useCallback(() => {
     const iframe = iframeRef.current;
-    if (!iframe || !iframe.contentDocument) return;
+    if (!iframe) return;
 
-    const doc = iframe.contentDocument;
     const html = content || getDefaultCanvas();
+    const srcdoc = buildSrcdoc({
+      html,
+      designSystemTokens,
+      commentBridge: true,
+      tweakBridge: true,
+    });
 
-    doc.open();
-    doc.write(html);
-    doc.close();
-  }, [content]);
+    iframe.srcdoc = srcdoc;
+  }, [content, designSystemTokens]);
 
   useEffect(() => {
     updateIframe();
   }, [updateIframe]);
 
+  // Toggle comment mode in iframe
+  useEffect(() => {
+    const iframe = iframeRef.current;
+    if (!iframe?.contentWindow) return;
+    iframe.contentWindow.postMessage(
+      { type: "designforge:comments:setMode", enabled: commentMode },
+      "*"
+    );
+  }, [commentMode]);
+
   const handleZoomIn = () => setScale((s) => Math.min(s + 0.1, 2));
   const handleZoomOut = () => setScale((s) => Math.max(s - 0.1, 0.5));
   const handleReset = () => setScale(1);
+
+  const handleExport = async (format: "html" | "pdf" | "zip") => {
+    const html = content || getDefaultCanvas();
+    await exportCanvas(html, { format, filename: "designforge-export" });
+  };
+
+  const handleLint = () => {
+    const html = content || getDefaultCanvas();
+    const result = lintArtifact(html);
+    setLintResult(formatLintResult(result));
+  };
 
   return (
     <div className="flex flex-col h-full">
@@ -76,8 +106,46 @@ export function Canvas({ content, onContentChange }: CanvasProps) {
           >
             Grid
           </button>
+          <button
+            onClick={() => setCommentMode(!commentMode)}
+            className={`text-xs px-2 py-1 rounded transition-colors ${
+              commentMode ? "bg-terracotta/10 text-terracotta" : "text-stone hover:text-ink"
+            }`}
+          >
+            Comments
+          </button>
+          <button
+            onClick={handleLint}
+            className="text-xs px-2 py-1 rounded transition-colors text-stone hover:text-ink"
+          >
+            Lint
+          </button>
+          <div className="h-4 w-px bg-stone/20" />
+          <button
+            onClick={() => handleExport("html")}
+            className="text-xs px-2 py-1 rounded transition-colors text-stone hover:text-ink"
+          >
+            HTML
+          </button>
+          <button
+            onClick={() => handleExport("pdf")}
+            className="text-xs px-2 py-1 rounded transition-colors text-stone hover:text-ink"
+          >
+            PDF
+          </button>
         </div>
       </div>
+
+      {/* Lint result */}
+      {lintResult && (
+        <div className="px-4 py-2 border-b border-stone/10 bg-linen text-xs whitespace-pre-wrap font-mono">
+          <div className="flex justify-between items-center mb-1">
+            <span className="font-semibold">Lint Result</span>
+            <button onClick={() => setLintResult(null)} className="text-stone hover:text-ink">×</button>
+          </div>
+          {lintResult}
+        </div>
+      )}
 
       {/* Canvas area */}
       <div className="flex-1 overflow-auto bg-parchment relative">

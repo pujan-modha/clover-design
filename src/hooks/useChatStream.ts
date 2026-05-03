@@ -4,12 +4,13 @@ export interface ChatMessage {
   id: string;
   role: "user" | "assistant" | "system";
   content: string;
-  parts?: Array<{ type: string; text?: string }>;
+  metadata?: Record<string, any>;
 }
 
 interface UseChatStreamOptions {
   projectId: string;
-  apiPath?: string;
+  model?: string;
+  reasoningEffort?: "low" | "medium" | "high";
 }
 
 interface UseChatStreamReturn {
@@ -21,22 +22,21 @@ interface UseChatStreamReturn {
   sendMessage: () => Promise<void>;
   append: (message: ChatMessage) => void;
   stop: () => void;
+  currentModel: string | null;
 }
 
 /**
- * Hook for streaming chat with an AI backend via SSE.
+ * Hook for streaming chat with an AI backend via the Vercel AI SDK data stream format.
  *
- * Keeps message history in React state and provides a stable `sendMessage`
- * callback. Uses a ref to avoid stale closures when reading the current
- * message list inside the streaming loop.
+ * Supports model selection, reasoning effort, and dynamic provider resolution.
  */
 export function useChatStream(options: UseChatStreamOptions): UseChatStreamReturn {
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [input, setInput] = useState("");
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [currentModel, setCurrentModel] = useState<string | null>(null);
   const abortRef = useRef<AbortController | null>(null);
-  /** Ref that always mirrors the latest messages array. */
   const messagesRef = useRef<ChatMessage[]>(messages);
   messagesRef.current = messages;
 
@@ -70,6 +70,7 @@ export function useChatStream(options: UseChatStreamOptions): UseChatStreamRetur
     setInput("");
     setIsLoading(true);
     setError(null);
+    setCurrentModel(null);
 
     const abortController = new AbortController();
     abortRef.current = abortController;
@@ -83,11 +84,12 @@ export function useChatStream(options: UseChatStreamOptions): UseChatStreamRetur
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
             projectId: options.projectId,
-            /** Read from ref so we always send the up-to-date history. */
             messages: [...messagesRef.current, userMsg].map((m) => ({
               role: m.role,
               content: m.content,
             })),
+            model: options.model,
+            reasoningEffort: options.reasoningEffort,
           }),
           signal: abortController.signal,
         }
@@ -100,44 +102,44 @@ export function useChatStream(options: UseChatStreamOptions): UseChatStreamRetur
 
       const reader = response.body!.getReader();
       const decoder = new TextDecoder();
+      let buffer = "";
 
       while (true) {
         const { done, value } = await reader.read();
         if (done) break;
 
-        const chunk = decoder.decode(value, { stream: true });
-        const lines = chunk.split("\n");
+        buffer += decoder.decode(value, { stream: true });
+        const lines = buffer.split("\n");
+        buffer = lines.pop() ?? "";
 
         for (const line of lines) {
-          if (line.startsWith("data: ")) {
-            const data = line.slice(6);
-            if (data === "[DONE]") continue;
+          if (!line.startsWith("0:")) continue;
 
-            try {
-              const parsed = JSON.parse(data) as { content?: string };
-              if (parsed.content) {
-                setMessages((prev) =>
-                  prev.map((m) =>
-                    m.id === assistantMsgId
-                      ? { ...m, content: m.content + parsed.content }
-                      : m
-                  )
-                );
-              }
-            } catch {
-              /* skip malformed SSE line */
+          try {
+            const jsonStr = line.slice(2);
+            const parsed = JSON.parse(jsonStr);
+
+            if (parsed.type === "model_name") {
+              setCurrentModel(parsed.content);
+            } else if (parsed.type === "content") {
+              setMessages((prev) =>
+                prev.map((m) =>
+                  m.id === assistantMsgId
+                    ? { ...m, content: m.content + (parsed.chunk ?? "") }
+                    : m
+                )
+              );
+            } else if (parsed.type === "done") {
+              // Stream complete
             }
-          } else if (line.startsWith("event: error")) {
-            const errLine = lines.find((l) => l.startsWith("data: "));
-            if (errLine) {
-              throw new Error(errLine.slice(6));
-            }
+          } catch {
+            /* skip malformed lines */
           }
         }
       }
     } catch (err: unknown) {
       if (err instanceof Error && err.name === "AbortError") {
-        /* user cancelled — no-op */
+        /* user cancelled */
       } else {
         const message = err instanceof Error ? err.message : "Failed to get response";
         setError(message);
@@ -153,7 +155,7 @@ export function useChatStream(options: UseChatStreamOptions): UseChatStreamRetur
       setIsLoading(false);
       abortRef.current = null;
     }
-  }, [input, isLoading, options.projectId]);
+  }, [input, isLoading, options.projectId, options.model, options.reasoningEffort]);
 
   return {
     messages,
@@ -164,5 +166,6 @@ export function useChatStream(options: UseChatStreamOptions): UseChatStreamRetur
     sendMessage,
     append,
     stop,
+    currentModel,
   };
 }

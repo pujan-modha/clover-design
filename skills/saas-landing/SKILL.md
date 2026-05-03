@@ -1,39 +1,55 @@
 ---
 name: saas-landing
-description: |
-  Single-page SaaS landing with hero, features, social proof, pricing, and CTA.
-triggers:
-  - "saas landing"
-  - "saas"
-  - "marketing page"
-  - "product landing"
-  - "startup landing"
-df:
-  mode: prototype
-  platform: desktop
-  scenario: marketing
-  preview:
-    type: html
-    entry: index.html
-  design_system:
-    requires: true
+mode: prototype
+preview: html
+inputs:
+  - name: companyName
+    type: string
+    label: Company Name
+  - name: tagline
+    type: string
+    label: Tagline
+  - name: primaryColor
+    type: string
+    label: Primary Color
+parameters:
+  - name: hue
+    type: hue
+    label: Accent Hue
+  - name: density
+    type: spacing
+    label: Content Density
+outputs:
+  primary: index.html
 ---
 
-# SaaS Landing Skill
+# SaaS Landing Page Skill
 
-## Sections (in order)
-1. **Hero** — logo, headline, subhead, primary + secondary CTA.
-2. **Features** — 3–6 tiles (icon, title, 1–2 sentences).
-3. **Social proof** — logos/testimonials (skip if user says none).
-4. **Pricing** — 2–3 tiers (skip if not requested).
-5. **Footer CTA** — accent band, one button.
-6. **Footer** — links + copyright.
+Generate a modern, conversion-focused SaaS landing page.
 
 ## Rules
-- All colors from DESIGN.md tokens.
-- Accent: once in hero, once in footer CTA, links.
-- `data-df-id` on every editable element.
-- Responsive at 1440w/768w/375w.
+- Single-page layout with sticky navigation
+- Hero section with gradient background (NO purple/cyan gradients)
+- Feature grid with 3-4 features (NO 3-column equal cards)
+- Social proof section with real company logos or placeholder blocks
+- Pricing table with 3 tiers
+- Footer with newsletter signup
+- Use the provided company name and tagline
+- Respect the primary color for accents (max 2 uses per screen)
+- Inter font is FORBIDDEN. Use Geist, Satoshi, or Cabinet Grotesk
 
-## Output
-Single `index.html`. No separate CSS/JS files.
+## Structure
+1. Navigation (sticky, blur backdrop)
+2. Hero (left text + right visual/metric)
+3. Social proof (logo bar)
+4. Features (alternating layout)
+5. Testimonials (1 highlighted + grid)
+6. Pricing (3 tiers, middle emphasized)
+7. CTA banner
+8. Footer
+
+## Technical
+- Single-file HTML with inline CSS
+- Responsive: mobile-first breakpoints
+- CSS custom properties for theming
+- Smooth scroll behavior

@@ -157,6 +157,16 @@ export interface ElementAttribute {
   value: string;
 }
 
+export interface DomTreeNode {
+  tag?: string;
+  id?: string;
+  classes?: string[];
+  selector?: string;
+  children?: DomTreeNode[];
+  type?: "text";
+  text?: string;
+}
+
 export interface ElementData {
   selector: string;
   tag: string;
@@ -166,6 +176,8 @@ export interface ElementData {
   rect: { top: number; left: number; width: number; height: number };
   breadcrumb: string[];
   attributes: ElementAttribute[];
+  domTree?: DomTreeNode;
+  parentTree?: DomTreeNode;
 }
 
 export interface CanvasMessage {

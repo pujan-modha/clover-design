@@ -50,7 +50,7 @@ export const create = mutation({
       status: "draft",
       isDefault,
       source: args.source ?? "manual",
-      designMd: args.designMd ?? null,
+      designMd: args.designMd ?? undefined,
       tokens: args.tokens ?? defaultTokens(),
       assets: [],
       createdAt: now,

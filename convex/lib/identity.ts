@@ -1,10 +1,10 @@
-import type { QueryCtx, MutationCtx } from "../_generated/server";
+import type { QueryCtx, MutationCtx, ActionCtx } from "../_generated/server";
 
-export async function getUserIdentity(ctx: QueryCtx | MutationCtx) {
+export async function getUserIdentity(ctx: QueryCtx | MutationCtx | ActionCtx) {
   return await ctx.auth.getUserIdentity();
 }
 
-export async function requireAuth(ctx: MutationCtx | QueryCtx) {
+export async function requireAuth(ctx: MutationCtx | QueryCtx | ActionCtx) {
   const identity = await getUserIdentity(ctx);
   if (!identity) {
     throw new Error("Not authenticated");
@@ -12,7 +12,7 @@ export async function requireAuth(ctx: MutationCtx | QueryCtx) {
   return identity;
 }
 
-export async function getAuthUserId(ctx: MutationCtx | QueryCtx) {
+export async function getAuthUserId(ctx: MutationCtx | QueryCtx | ActionCtx) {
   const identity = await requireAuth(ctx);
   return identity.tokenIdentifier;
 }

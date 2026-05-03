@@ -1,26 +1,17 @@
 import type { ElementData, ElementSelector } from "./types";
 
-/** Payload for messages sent from the host to the iframe canvas. */
 export interface HostMessage {
   source: "designforge-host";
   type: string;
   data?: Record<string, unknown>;
 }
 
-/** Payload for messages sent from the iframe canvas back to the host. */
 export interface CanvasMessage {
   source: "designforge-canvas";
   type: string;
   data?: Record<string, unknown>;
 }
 
-/**
- * Post a message to the iframe's content window.
- *
- * @param iframe - The target iframe element (may be null).
- * @param type - Message type discriminator (e.g. "ENABLE", "UPDATE_STYLE").
- * @param data - Optional payload object.
- */
 export function postToCanvas(
   iframe: HTMLIFrameElement | null,
   type: string,
@@ -33,18 +24,6 @@ export function postToCanvas(
   );
 }
 
-/**
- * Injected script that runs inside every preview iframe.
- *
- * Provides three subsystems:
- * 1. **Element selection** — crosshair cursor, hover overlay, click-to-select,
- *    computed-style extraction, and bidirectional messaging with the host.
- * 2. **Tweaks** — listens for `designforge:tweaks:update` postMessages and
- *    applies CSS custom properties in real time. Persists to localStorage.
- * 3. **Comments** — separate cursor mode that posts element metadata back to
- *    the host on click, plus a 500 ms polling loop for live rect tracking so
- *    pins stay glued to their elements across scroll / resize.
- */
 export const CANVAS_INJECTOR_SCRIPT = `
 (function() {
   'use strict';
@@ -84,7 +63,7 @@ export const CANVAS_INJECTOR_SCRIPT = `
       let part = current.tagName.toLowerCase();
       if (current.id) { part += '#' + current.id; parts.unshift(part); break; }
       if (current.className && typeof current.className === 'string') {
-        const classes = current.className.split(/\\s+/).filter(Boolean);
+        const classes = current.className.split(/\s+/).filter(Boolean);
         if (classes.length) part += '.' + classes.join('.');
       }
       const parent = current.parentElement;
@@ -101,32 +80,58 @@ export const CANVAS_INJECTOR_SCRIPT = `
     return parts.join(' > ');
   }
 
+  /** Extract full computed styles for inspector */
   function getComputedStyles(el) {
     const cs = window.getComputedStyle(el);
-    return {
-      color: cs.color,
-      backgroundColor: cs.backgroundColor,
-      fontSize: cs.fontSize,
-      fontFamily: cs.fontFamily,
-      fontWeight: cs.fontWeight,
-      lineHeight: cs.lineHeight,
-      letterSpacing: cs.letterSpacing,
-      textAlign: cs.textAlign,
-      padding: cs.padding,
-      margin: cs.margin,
-      borderRadius: cs.borderRadius,
-      border: cs.border,
-      display: cs.display,
-      flexDirection: cs.flexDirection,
-      alignItems: cs.alignItems,
-      justifyContent: cs.justifyContent,
-      gap: cs.gap,
-      width: cs.width,
-      height: cs.height,
-      position: cs.position,
-      top: cs.top,
-      left: cs.left,
-    };
+    const styles = {};
+    const keys = [
+      'color','backgroundColor','fontSize','fontFamily','fontWeight','lineHeight',
+      'letterSpacing','textAlign','textTransform','padding','margin','borderRadius',
+      'border','borderWidth','borderColor','borderStyle','display','flexDirection',
+      'alignItems','justifyContent','gap','width','height','minWidth','minHeight',
+      'maxWidth','maxHeight','position','top','left','right','bottom',
+      'zIndex','opacity','boxShadow','transform','overflow','whiteSpace',
+      'cursor','pointerEvents','visibility'
+    ];
+    for (const key of keys) {
+      styles[key] = cs[key];
+    }
+    return styles;
+  }
+
+  /** Build DOM tree snapshot for selected element */
+  function getDomTree(el) {
+    function nodeInfo(node) {
+      if (node.nodeType === Node.TEXT_NODE) {
+        const text = node.textContent.trim();
+        return text ? { type: 'text', text: text.slice(0, 60) } : null;
+      }
+      if (node.nodeType !== Node.ELEMENT_NODE) return null;
+      const info = {
+        tag: node.tagName.toLowerCase(),
+        id: node.id || undefined,
+        classes: node.className && typeof node.className === 'string'
+          ? node.className.split(/\s+/).filter(Boolean).slice(0, 4)
+          : undefined,
+        children: [],
+        selector: getSelector(node),
+      };
+      // Limit depth and breadth
+      if (node.children.length <= 8) {
+        for (const child of node.children) {
+          const childInfo = nodeInfo(child);
+          if (childInfo) info.children.push(childInfo);
+        }
+      } else {
+        info.children = [{ type: 'text', text: '(' + node.children.length + ' children)' }];
+      }
+      return info;
+    }
+
+    // Return tree from body down to selected element + its children
+    const tree = nodeInfo(document.body);
+    const selectedTree = nodeInfo(el);
+    return { tree, selectedTree };
   }
 
   function send(type, data) {
@@ -138,6 +143,15 @@ export const CANVAS_INJECTOR_SCRIPT = `
     if (!highlightBox) highlightBox = createBox('#c96442');
     document.body.appendChild(highlightBox);
     updateBox(highlightBox, el);
+
+    const tree = getDomTree(el);
+    const attributes = [];
+    for (const attr of el.attributes) {
+      if (attr.name.startsWith('data-df-') || attr.name === 'class' || attr.name === 'id' || attr.name === 'style') {
+        attributes.push({ name: attr.name, value: attr.value });
+      }
+    }
+
     send('ELEMENT_SELECTED', {
       selector: getSelector(el),
       tag: el.tagName.toLowerCase(),
@@ -145,7 +159,27 @@ export const CANVAS_INJECTOR_SCRIPT = `
       html: el.outerHTML.slice(0, 1000),
       styles: getComputedStyles(el),
       rect: el.getBoundingClientRect(),
+      attributes: attributes,
+      breadcrumb: getBreadcrumb(el),
+      domTree: tree.selectedTree,
+      parentTree: tree.tree,
     });
+  }
+
+  function getBreadcrumb(el) {
+    const crumbs = [];
+    let current = el;
+    while (current && current !== document.body) {
+      let name = current.tagName.toLowerCase();
+      if (current.id) name += '#' + current.id;
+      else if (current.className && typeof current.className === 'string') {
+        const firstClass = current.className.split(/\s+/).filter(Boolean)[0];
+        if (firstClass) name += '.' + firstClass;
+      }
+      crumbs.unshift(name);
+      current = current.parentElement;
+    }
+    return crumbs;
   }
 
   function deselect() {
@@ -170,9 +204,14 @@ export const CANVAS_INJECTOR_SCRIPT = `
     const el = document.elementFromPoint(e.clientX, e.clientY);
     if (!el || el === document.body || el === document.documentElement) {
       if (hoverBox) hoverBox.style.display = 'none';
+      if (hoverEl) {
+        send('ELEMENT_LEAVE', { selector: getSelector(hoverEl) });
+        hoverEl = null;
+      }
       return;
     }
     if (el === hoverEl) { updateBox(hoverBox, el); return; }
+    if (hoverEl) send('ELEMENT_LEAVE', { selector: getSelector(hoverEl) });
     hoverEl = el;
     if (!hoverBox) hoverBox = createBox('#3b82f6');
     document.body.appendChild(hoverBox);
@@ -200,6 +239,19 @@ export const CANVAS_INJECTOR_SCRIPT = `
         if (selectedEl && msg.data && msg.data.styles) {
           Object.assign(selectedEl.style, msg.data.styles);
           updateBox(highlightBox, selectedEl);
+          // Re-send updated computed styles
+          send('ELEMENT_SELECTED', {
+            selector: getSelector(selectedEl),
+            tag: selectedEl.tagName.toLowerCase(),
+            text: selectedEl.textContent?.slice(0, 200) || '',
+            html: selectedEl.outerHTML.slice(0, 1000),
+            styles: getComputedStyles(selectedEl),
+            rect: selectedEl.getBoundingClientRect(),
+            attributes: Array.from(selectedEl.attributes).map(a => ({ name: a.name, value: a.value })),
+            breadcrumb: getBreadcrumb(selectedEl),
+            domTree: getDomTree(selectedEl).selectedTree,
+            parentTree: getDomTree(selectedEl).tree,
+          });
         }
         break;
       case 'UPDATE_TEXT':
@@ -222,8 +274,20 @@ export const CANVAS_INJECTOR_SCRIPT = `
       case 'GET_HTML':
         send('HTML_CONTENT', { html: document.documentElement.outerHTML });
         break;
-      case 'designforge:comments:setMode':
-        // Handled by comments subsystem below
+      case 'SCAN_TARGETS':
+        const targets = [];
+        document.querySelectorAll('[data-df-id], [data-screen-label]').forEach(function(el) {
+          const r = el.getBoundingClientRect();
+          targets.push({
+            selector: getSelector(el),
+            tag: el.tagName.toLowerCase(),
+            label: el.dataset.dfId || el.dataset.screenLabel || '',
+            text: el.textContent?.slice(0, 60) || '',
+            rect: { top: r.top + window.scrollY, left: r.left + window.scrollX, width: r.width, height: r.height },
+            htmlHint: el.outerHTML.slice(0, 180),
+          });
+        });
+        send('SCAN_TARGETS_RESULT', { targets });
         break;
     }
   });
@@ -288,7 +352,7 @@ export const CANVAS_INJECTOR_SCRIPT = `
       let part = current.tagName.toLowerCase();
       if (current.id) { part += '#' + current.id; parts.unshift(part); break; }
       if (current.className && typeof current.className === 'string') {
-        const classes = current.className.split(/\\s+/).filter(Boolean);
+        const classes = current.className.split(/\s+/).filter(Boolean);
         if (classes.length) part += '.' + classes.join('.');
       }
       const parent = current.parentElement;
@@ -346,32 +410,38 @@ export const CANVAS_INJECTOR_SCRIPT = `
   }, true);
 
   // === LIVE RECT TRACKING ===
-  setInterval(function() {
-    if (!window.__LIVE_COMMENT_SELECTORS__) return;
-    const rects = {};
-    window.__LIVE_COMMENT_SELECTORS__.forEach(function(sel) {
-      try {
-        const el = document.querySelector(sel);
-        if (el) {
-          const r = el.getBoundingClientRect();
-          rects[sel] = { top: r.top + window.scrollY, left: r.left + window.scrollX, width: r.width, height: r.height };
-        }
-      } catch(e) {}
+  let rafId = null;
+  function scheduleRectUpdate() {
+    if (rafId) return;
+    rafId = requestAnimationFrame(function() {
+      rafId = null;
+      if (!window.__LIVE_COMMENT_SELECTORS__) return;
+      const rects = {};
+      window.__LIVE_COMMENT_SELECTORS__.forEach(function(sel) {
+        try {
+          const el = document.querySelector(sel);
+          if (el) {
+            const r = el.getBoundingClientRect();
+            rects[sel] = { top: r.top + window.scrollY, left: r.left + window.scrollX, width: r.width, height: r.height };
+          }
+        } catch(e) {}
+      });
+      if (Object.keys(rects).length > 0) {
+        window.parent.postMessage({ type: 'designforge:comment:liveRects', rects }, '*');
+      }
     });
-    if (Object.keys(rects).length > 0) {
-      window.parent.postMessage({ type: 'designforge:comment:liveRects', rects }, '*');
-    }
-  }, 500);
+  }
+
+  window.addEventListener('scroll', scheduleRectUpdate, { passive: true });
+  window.addEventListener('resize', scheduleRectUpdate, { passive: true });
+
+  // Also keep the interval as fallback
+  setInterval(scheduleRectUpdate, 500);
 
   window.__designforgeReady = true;
 })();
 `;
 
-/**
- * Build a CSS selector for an element by walking up the DOM tree.
- *
- * Uses IDs when available, falls back to class + nth-of-type for disambiguation.
- */
 export function getElementSelector(el: HTMLElement): string {
   const parts: string[] = [];
   let current: HTMLElement | null = el;
@@ -406,7 +476,6 @@ export function getElementSelector(el: HTMLElement): string {
   return parts.join(" > ");
 }
 
-/** Inject the canvas manipulation script into a Document. */
 export function injectCanvasScripts(doc: Document): void {
   const script = doc.createElement("script");
   script.textContent = CANVAS_INJECTOR_SCRIPT;
