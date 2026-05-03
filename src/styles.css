@@ -1,0 +1,84 @@
+@import "tailwindcss";
+@import "tw-animate-css";
+@import "shadcn/tailwind.css";
+
+@custom-variant dark (&:is(.dark *));
+@plugin "@tailwindcss/typography";
+
+@theme {
+  --font-sans: "DM Sans", ui-sans-serif, system-ui, sans-serif;
+  --font-serif: "Fraunces", Georgia, serif;
+  --font-mono: "JetBrains Mono", ui-monospace, monospace;
+
+  --color-parchment: #f8f7f4;
+  --color-terracotta: #c96442;
+  --color-sidebar: #1a1917;
+  --color-ink: #2a2927;
+  --color-stone: #8a8884;
+  --color-linen: #f0eeea;
+  --color-cream: #fdfcfa;
+}
+
+:root {
+  --background: 40 20% 98%;
+  --foreground: 30 6% 15%;
+  --card: 40 20% 98%;
+  --card-foreground: 30 6% 15%;
+  --popover: 40 20% 98%;
+  --popover-foreground: 30 6% 15%;
+  --primary: 18 55% 53%;
+  --primary-foreground: 40 20% 98%;
+  --secondary: 35 12% 92%;
+  --secondary-foreground: 30 6% 15%;
+  --muted: 35 12% 92%;
+  --muted-foreground: 30 4% 50%;
+  --accent: 35 12% 92%;
+  --accent-foreground: 30 6% 15%;
+  --destructive: 0 72% 51%;
+  --destructive-foreground: 0 0% 100%;
+  --border: 30 10% 88%;
+  --input: 30 10% 88%;
+  --ring: 18 55% 53%;
+  --radius: 0.5rem;
+}
+
+.dark {
+  --background: 30 6% 10%;
+  --foreground: 40 20% 98%;
+  --card: 30 6% 12%;
+  --card-foreground: 40 20% 98%;
+  --popover: 30 6% 12%;
+  --popover-foreground: 40 20% 98%;
+  --primary: 18 55% 53%;
+  --primary-foreground: 40 20% 98%;
+  --secondary: 30 6% 18%;
+  --secondary-foreground: 40 20% 98%;
+  --muted: 30 6% 18%;
+  --muted-foreground: 30 4% 60%;
+  --accent: 30 6% 18%;
+  --accent-foreground: 40 20% 98%;
+  --destructive: 0 62% 40%;
+  --destructive-foreground: 0 0% 100%;
+  --border: 30 6% 20%;
+  --input: 30 6% 20%;
+  --ring: 18 55% 53%;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body,
+#app {
+  min-height: 100%;
+}
+
+body {
+  margin: 0;
+  font-family: var(--font-sans);
+  background-color: hsl(var(--background));
+  color: hsl(var(--foreground));
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
