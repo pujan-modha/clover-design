@@ -1,207 +1,115 @@
-Welcome to your new TanStack Start app! 
+# DesignForge
 
-# Getting Started
+Open-ended creation platform. Build anything from dashboards to landing pages to full app prototypes with AI assistance.
 
-To run this application:
+## Stack
+
+- **Framework**: TanStack Start (RC) — full-stack React, SSR, file-based routing
+- **Backend/DB**: Convex — real-time queries, mutations, HTTP actions, file storage
+- **Auth**: Better Auth — Email OTP (passwordless), Google OAuth, GitHub OAuth
+- **AI/Streaming**: OpenRouter SSE via Convex HTTP actions
+- **Styling**: Tailwind CSS v4 + shadcn/ui
+- **Design System**: DESIGN.md token spec (Google `@google/design.md`)
+
+## Getting Started
+
+### Prerequisites
+
+- Node.js 22+
+- pnpm
+
+### Install
 
 ```bash
 pnpm install
+```
+
+### Environment Variables
+
+Copy `.env.local` and fill in the required values:
+
+```bash
+cp .env.local .env.local.production  # or just edit .env.local
+```
+
+Required:
+- `BETTER_AUTH_SECRET` — `openssl rand -base64 32`
+- `OPENROUTER_API_KEY` — get from openrouter.ai
+- `RESEND_API_KEY` — for email OTP (optional in dev)
+- OAuth credentials — for social login (optional)
+
+### Start Convex (in a separate terminal)
+
+```bash
+npx convex dev
+```
+
+### Start the App
+
+```bash
 pnpm dev
 ```
 
-# Building For Production
+## Project Structure
 
-To build this application for production:
-
-```bash
-pnpm build
+```
+convex/                      # Convex backend
+  schema.ts                  # Database schema
+  auth.config.ts             # JWT validation (Better Auth)
+  projects.ts                # Project CRUD
+  chatMessages.ts            # Chat message CRUD
+  chat/
+    post.route.ts            # AI streaming HTTP action
+  http.ts                    # HTTP route registration
+  lib/
+    identity.ts              # Auth helpers
+src/
+  routes/                    # TanStack Router file-based routes
+  components/
+    ui/                      # shadcn/ui components
+    chat/                    # Chat panel
+    canvas/                  # Canvas preview
+  lib/
+    auth-client.ts           # Better Auth client
+    convex.ts                # Convex client
+    stores/                  # TanStack Store definitions
+  hooks/
+    useChatStream.ts         # Custom SSE chat hook
+lib/
+  auth.ts                    # Better Auth server config
+DESIGN.md                    # Design language spec
 ```
 
-## Testing
+## Architecture
 
-This project uses [Vitest](https://vitest.dev/) for testing. You can run the tests with:
+### Auth Flow
+1. User signs in via Email OTP or OAuth
+2. Better Auth issues RS256 JWT
+3. Convex validates JWT via `auth.config.ts`
+4. All Convex functions check `ctx.auth.getUserIdentity()`
 
-```bash
-pnpm test
-```
+### AI Streaming
+1. User sends message → saved to Convex
+2. Frontend calls Convex HTTP action (`/chat/projects/:id/generate`)
+3. HTTP action streams from OpenRouter SSE
+4. Frontend receives chunks and renders in real-time
+5. Final message saved to Convex when stream ends
 
-## Styling
+### Canvas
+- Renders HTML in a sandboxed iframe
+- Supports zoom, grid overlay
+- AI-generated code is injected into the iframe
 
-This project uses [Tailwind CSS](https://tailwindcss.com/) for styling.
+## Design System
 
-### Removing Tailwind CSS
+See `DESIGN.md` for the full token spec. Key values:
+- **Colors**: parchment, terracotta, ink, stone, linen, cream
+- **Typography**: Fraunces (display), DM Sans (body), JetBrains Mono (mono)
+- **Spacing**: 8px base grid
 
-If you prefer not to use Tailwind CSS:
+## Phase Status
 
-1. Remove the demo pages in `src/routes/demo/`
-2. Replace the Tailwind import in `src/styles.css` with your own styles
-3. Remove `tailwindcss()` from the plugins array in `vite.config.ts`
-4. Uninstall the packages: `pnpm add @tailwindcss/vite tailwindcss --dev`
-
-
-## Deploy with Nitro
-
-This project uses Nitro as a generic server adapter, so it can run on any Node-compatible host.
-
-```bash
-npm run build
-node dist/server/index.mjs
-```
-
-The build output is a self-contained Node server. To deploy, push the `dist/` directory to your host (Render, Fly.io, your own VPS, etc.) and run the server command above.
-
-For host-specific presets (Vercel, Netlify, Cloudflare, AWS Lambda, etc.) and tuning, see https://v3.nitro.build/deploy.
-
-
-
-## Routing
-
-This project uses [TanStack Router](https://tanstack.com/router) with file-based routing. Routes are managed as files in `src/routes`.
-
-### Adding A Route
-
-To add a new route to your application just add a new file in the `./src/routes` directory.
-
-TanStack will automatically generate the content of the route file for you.
-
-Now that you have two routes you can use a `Link` component to navigate between them.
-
-### Adding Links
-
-To use SPA (Single Page Application) navigation you will need to import the `Link` component from `@tanstack/react-router`.
-
-```tsx
-import { Link } from "@tanstack/react-router";
-```
-
-Then anywhere in your JSX you can use it like so:
-
-```tsx
-<Link to="/about">About</Link>
-```
-
-This will create a link that will navigate to the `/about` route.
-
-More information on the `Link` component can be found in the [Link documentation](https://tanstack.com/router/v1/docs/framework/react/api/router/linkComponent).
-
-### Using A Layout
-
-In the File Based Routing setup the layout is located in `src/routes/__root.tsx`. Anything you add to the root route will appear in all the routes. The route content will appear in the JSX where you render `{children}` in the `shellComponent`.
-
-Here is an example layout that includes a header:
-
-```tsx
-import { HeadContent, Scripts, createRootRoute } from '@tanstack/react-router'
-
-export const Route = createRootRoute({
-  head: () => ({
-    meta: [
-      { charSet: 'utf-8' },
-      { name: 'viewport', content: 'width=device-width, initial-scale=1' },
-      { title: 'My App' },
-    ],
-  }),
-  shellComponent: ({ children }) => (
-    <html lang="en">
-      <head>
-        <HeadContent />
-      </head>
-      <body>
-        <header>
-          <nav>
-            <Link to="/">Home</Link>
-            <Link to="/about">About</Link>
-          </nav>
-        </header>
-        {children}
-        <Scripts />
-      </body>
-    </html>
-  ),
-})
-```
-
-More information on layouts can be found in the [Layouts documentation](https://tanstack.com/router/latest/docs/framework/react/guide/routing-concepts#layouts).
-
-## Server Functions
-
-TanStack Start provides server functions that allow you to write server-side code that seamlessly integrates with your client components.
-
-```tsx
-import { createServerFn } from '@tanstack/react-start'
-
-const getServerTime = createServerFn({
-  method: 'GET',
-}).handler(async () => {
-  return new Date().toISOString()
-})
-
-// Use in a component
-function MyComponent() {
-  const [time, setTime] = useState('')
-  
-  useEffect(() => {
-    getServerTime().then(setTime)
-  }, [])
-  
-  return <div>Server time: {time}</div>
-}
-```
-
-## API Routes
-
-You can create API routes by using the `server` property in your route definitions:
-
-```tsx
-import { createFileRoute } from '@tanstack/react-router'
-import { json } from '@tanstack/react-start'
-
-export const Route = createFileRoute('/api/hello')({
-  server: {
-    handlers: {
-      GET: () => json({ message: 'Hello, World!' }),
-    },
-  },
-})
-```
-
-## Data Fetching
-
-There are multiple ways to fetch data in your application. You can use TanStack Query to fetch data from a server. But you can also use the `loader` functionality built into TanStack Router to load the data for a route before it's rendered.
-
-For example:
-
-```tsx
-import { createFileRoute } from '@tanstack/react-router'
-
-export const Route = createFileRoute('/people')({
-  loader: async () => {
-    const response = await fetch('https://swapi.dev/api/people')
-    return response.json()
-  },
-  component: PeopleComponent,
-})
-
-function PeopleComponent() {
-  const data = Route.useLoaderData()
-  return (
-    <ul>
-      {data.results.map((person) => (
-        <li key={person.name}>{person.name}</li>
-      ))}
-    </ul>
-  )
-}
-```
-
-Loaders simplify your data fetching logic dramatically. Check out more information in the [Loader documentation](https://tanstack.com/router/latest/docs/framework/react/guide/data-loading#loader-parameters).
-
-# Demo files
-
-Files prefixed with `demo` can be safely deleted. They are there to provide a starting point for you to play around with the features you've installed.
-
-# Learn More
-
-You can learn more about all of the offerings from TanStack in the [TanStack documentation](https://tanstack.com).
-
-For TanStack Start specific documentation, visit [TanStack Start](https://tanstack.com/start).
+- [x] Phase 1: Foundation (scaffold, auth, Convex, routes, design system)
+- [x] Phase 2: Core Features (chat, AI streaming, canvas, stores)
+- [ ] Phase 3: Design System Feature (token editor, AI extraction, apply)
+- [ ] Phase 4: Polish (export, snapshots, share, collaboration)

@@ -8,13 +8,23 @@
  * @module
  */
 
+import type * as chatMessages from "../chatMessages.js";
+import type * as http from "../http.js";
+import type * as lib_identity from "../lib/identity.js";
+import type * as projects from "../projects.js";
+
 import type {
   ApiFromModules,
   FilterApi,
   FunctionReference,
 } from "convex/server";
 
-declare const fullApi: ApiFromModules<{}>;
+declare const fullApi: ApiFromModules<{
+  chatMessages: typeof chatMessages;
+  http: typeof http;
+  "lib/identity": typeof lib_identity;
+  projects: typeof projects;
+}>;
 
 /**
  * A utility for referencing Convex functions in your app's public API.
